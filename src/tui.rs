@@ -486,7 +486,7 @@ pub async fn run_interactive_player(
                                 state.is_loading = false;
                             }
                         }
-                        KeyCode::Left => {
+                        KeyCode::Left | KeyCode::Char('h') => {
                             let new_channel = state.current_channel.prev();
                             if state.current_channel != new_channel {
                                 state.current_channel = new_channel;
@@ -500,7 +500,7 @@ pub async fn run_interactive_player(
                                 state.is_loading = false;
                             }
                         }
-                        KeyCode::Right => {
+                        KeyCode::Right | KeyCode::Char('l') => {
                             let new_channel = state.current_channel.next();
                             if state.current_channel != new_channel {
                                 state.current_channel = new_channel;
