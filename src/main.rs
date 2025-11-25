@@ -5,6 +5,7 @@ mod decoder;
 mod m3u8;
 mod player;
 mod types;
+mod ui;
 
 #[tokio::main]
 async fn main() {

@@ -3,6 +3,8 @@ use clap::{Parser, Subcommand};
 
 use crate::client::NhkRadioClient;
 use crate::player::Player;
+use crate::types::Root;
+use crate::ui::{print_now_playing, ProgramInfo};
 
 #[derive(Parser)]
 #[command(name = "nhk-radio-player")]
@@ -51,9 +53,14 @@ pub async fn run_cli() -> Result<()> {
                         _ => anyhow::bail!("Invalid kind: {}. Must be one of: r1, r2, fm", kind),
                     };
 
-                    println!("Playing {} Radio ({}) from area {}", kind.to_uppercase(), data.areajp, area);
-                    println!("Stream URL: {}", m3u8_url);
-                    println!("Press Ctrl+C to stop playback.");
+                    let program_url = config
+                        .url_program_noa
+                        .replace("//", "https://")
+                        .replace("{area}", &data.areakey);
+                    let program = client.fetch_program(&program_url).await.ok();
+
+                    let program_info = get_program_info(&program, &kind, &data.areajp);
+                    print_now_playing(&program_info);
 
                     let player = Player::new();
                     return player.play_live(m3u8_url).await;
@@ -146,5 +153,40 @@ pub async fn run_cli() -> Result<()> {
             }
             Ok(())
         }
+    }
+}
+
+fn get_program_info(program: &Option<Root>, kind: &str, area_name: &str) -> ProgramInfo {
+    let station_name = match kind {
+        "r1" => "ラジオ第1",
+        "r2" => "ラジオ第2",
+        "fm" => "FM",
+        _ => kind,
+    }
+    .to_string();
+
+    let (program_title, description) = program
+        .as_ref()
+        .and_then(|p| {
+            let channel = match kind {
+                "r1" => &p.r1,
+                "r2" => &p.r2,
+                "fm" => &p.r3,
+                _ => return None,
+            };
+            channel.present.as_ref().and_then(|present| {
+                present
+                    .about
+                    .as_ref()
+                    .map(|about| (about.name.clone(), about.description.clone()))
+            })
+        })
+        .unwrap_or_else(|| ("番組情報を取得中...".to_string(), String::new()));
+
+    ProgramInfo {
+        station_name,
+        area_name: area_name.to_string(),
+        program_title,
+        description,
     }
 }
