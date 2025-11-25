@@ -2,9 +2,8 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::client::NhkRadioClient;
-use crate::player::Player;
-use crate::types::Root;
-use crate::ui::{print_now_playing, ProgramInfo};
+use crate::player::ChannelKind;
+use crate::tui::run_interactive_player;
 
 #[derive(Parser)]
 #[command(name = "nhk-radio-player")]
@@ -18,7 +17,7 @@ pub struct Cli {
 pub enum Commands {
     /// Play radio stream
     Play {
-        /// Area code (e.g., "130" for Tokyo)
+        /// Area code (e.g., "130" or "tokyo")
         area: String,
         /// Channel type: r1, r2, or fm
         kind: String,
@@ -42,32 +41,17 @@ pub async fn run_cli() -> Result<()> {
 
     match cli.command {
         Commands::Play { area, kind } => {
-            let config = client.fetch_config().await?;
+            let channel_kind = match kind.as_str() {
+                "r1" => ChannelKind::R1,
+                "r2" => ChannelKind::R2,
+                "fm" => ChannelKind::Fm,
+                _ => anyhow::bail!("Invalid kind: {}. Must be one of: r1, r2, fm", kind),
+            };
 
-            for data in &config.stream_url.data {
-                if data.area == area {
-                    let m3u8_url = match kind.as_str() {
-                        "r1" => &data.r1hls,
-                        "r2" => &data.r2hls,
-                        "fm" => &data.fmhls,
-                        _ => anyhow::bail!("Invalid kind: {}. Must be one of: r1, r2, fm", kind),
-                    };
+            // Handle area name aliases
+            let area_code = normalize_area(&area);
 
-                    let program_url = config
-                        .url_program_noa
-                        .replace("//", "https://")
-                        .replace("{area}", &data.areakey);
-                    let program = client.fetch_program(&program_url).await.ok();
-
-                    let program_info = get_program_info(&program, &kind, &data.areajp);
-                    print_now_playing(&program_info);
-
-                    let player = Player::new();
-                    return player.play_live(m3u8_url).await;
-                }
-            }
-
-            anyhow::bail!("Area not found: {}", area);
+            return run_interactive_player(area_code, channel_kind).await;
         }
 
         Commands::Area => {
@@ -156,37 +140,25 @@ pub async fn run_cli() -> Result<()> {
     }
 }
 
-fn get_program_info(program: &Option<Root>, kind: &str, area_name: &str) -> ProgramInfo {
-    let station_name = match kind {
-        "r1" => "ラジオ第1",
-        "r2" => "ラジオ第2",
-        "fm" => "FM",
-        _ => kind,
-    }
-    .to_string();
-
-    let (program_title, description) = program
-        .as_ref()
-        .and_then(|p| {
-            let channel = match kind {
-                "r1" => &p.r1,
-                "r2" => &p.r2,
-                "fm" => &p.r3,
-                _ => return None,
-            };
-            channel.present.as_ref().and_then(|present| {
-                present
-                    .about
-                    .as_ref()
-                    .map(|about| (about.name.clone(), about.description.clone()))
-            })
-        })
-        .unwrap_or_else(|| ("番組情報を取得中...".to_string(), String::new()));
-
-    ProgramInfo {
-        station_name,
-        area_name: area_name.to_string(),
-        program_title,
-        description,
+fn normalize_area(area: &str) -> String {
+    match area.to_lowercase().as_str() {
+        "東京" => "tokyo".to_string(),
+        "大阪" => "osaka".to_string(),
+        "名古屋" => "nagoya".to_string(),
+        "札幌" => "sapporo".to_string(),
+        "仙台" => "sendai".to_string(),
+        "広島" => "hiroshima".to_string(),
+        "松山" => "matsuyama".to_string(),
+        "福岡" => "fukuoka".to_string(),
+        // Also handle old numeric codes for backwards compatibility
+        "130" => "tokyo".to_string(),
+        "400" => "osaka".to_string(),
+        "300" => "nagoya".to_string(),
+        "010" => "sapporo".to_string(),
+        "040" => "sendai".to_string(),
+        "540" => "hiroshima".to_string(),
+        "580" => "matsuyama".to_string(),
+        "810" => "fukuoka".to_string(),
+        _ => area.to_lowercase(),
     }
 }

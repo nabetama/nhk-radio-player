@@ -1,6 +1,6 @@
 # NHK Radio Player
 
-<img width="884" height="404" alt="image" src="https://github.com/user-attachments/assets/59cb8d9a-8f4d-4529-b7cd-917714124e55" />
+![output](https://github.com/user-attachments/assets/82a1b155-edb6-43f1-b624-0047a98dfa55)
 
 A CLI radio player for NHK Radio (Japan) written in Rust.
 

@@ -6,7 +6,12 @@ use cbc::Decryptor;
 type Aes128CbcDec = Decryptor<Aes128>;
 
 /// Decrypt segment data using AES-128-CBC
-pub fn decrypt_segment(data: &[u8], key: &[u8], iv_hex: Option<&str>, seq_no: u64) -> Result<Vec<u8>> {
+pub fn decrypt_segment(
+    data: &[u8],
+    key: &[u8],
+    iv_hex: Option<&str>,
+    seq_no: u64,
+) -> Result<Vec<u8>> {
     if key.len() != 16 {
         anyhow::bail!("Invalid key length: expected 16, got {}", key.len());
     }
