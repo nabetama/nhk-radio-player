@@ -19,7 +19,7 @@ pub struct StreamUrl {
     pub data: Vec<StreamData>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct StreamData {
     pub areajp: String,
