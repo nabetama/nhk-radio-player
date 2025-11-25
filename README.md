@@ -5,6 +5,9 @@ A CLI radio player for NHK Radio (Japan) written in Rust.
 ## Features
 
 - Play NHK radio streams (R1, R2, FM)
+  - R1: NHKラジオ第1
+  - R2: NHKラジオ第2
+  - FM: NHK-FM
 - List available areas and streams
 - Show current program information
 - Support for HLS streaming with AES-128 encryption
