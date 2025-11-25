@@ -1,12 +1,14 @@
 # NHK Radio Player
 
+<img width="884" height="404" alt="image" src="https://github.com/user-attachments/assets/59cb8d9a-8f4d-4529-b7cd-917714124e55" />
+
 A CLI radio player for NHK Radio (Japan) written in Rust.
 
 ## Features
 
 - Play NHK radio streams (R1, R2, FM)
-  - R1: NHKラジオ第1
-  - R2: NHKラジオ第2
+  - R1: NHK ラジオ第 1
+  - R2: NHK ラジオ第 2
   - FM: NHK-FM
 - List available areas and streams
 - Show current program information
@@ -87,7 +89,6 @@ The application consists of several modules:
 - `player`: Audio streaming and playback
 - `cli`: Command-line interface
 
-
 ## License
 
 MIT
@@ -95,3 +96,4 @@ MIT
 ## Author
 
 Mao Nabeta
+
