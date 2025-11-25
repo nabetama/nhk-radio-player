@@ -3,6 +3,7 @@ mod client;
 mod crypto;
 mod decoder;
 mod m3u8;
+mod player;
 mod tui;
 mod types;
 
