@@ -44,7 +44,7 @@ nhk-radio-player program <area_code>
 Example:
 
 ```bash
-nhk-radio-player program 130  # Tokyo area
+nhk-radio-player program tokyo
 ```
 
 ### Play Radio Stream
@@ -58,25 +58,14 @@ Where `<channel>` is one of: `r1`, `r2`, or `fm`
 Example:
 
 ```bash
-nhk-radio-player play 130 r1  # Play NHK Radio 1 in Tokyo
+nhk-radio-player play tokyo r1  # Play NHK Radio 1 in Tokyo
 ```
-
-Press Ctrl+C to stop playback.
 
 ### List All Available Streams
 
 ```bash
 nhk-radio-player list
 ```
-
-## Common Area Codes
-
-- 130: Tokyo (東京)
-- 400: Osaka (大阪)
-- 010: Sapporo (札幌)
-- 810: Fukuoka (福岡)
-
-Use the `area` command to see all available areas.
 
 ## Architecture
 
