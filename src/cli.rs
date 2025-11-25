@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::client::NhkRadioClient;
-use crate::tui::{run_interactive_player, ChannelKind};
+use crate::tui::{ChannelKind, run_interactive_player};
 
 #[derive(Parser)]
 #[command(name = "nhk-radio-player")]

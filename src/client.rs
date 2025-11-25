@@ -1,6 +1,5 @@
 use anyhow::Result;
 use reqwest::Client;
-use serde_json;
 
 use crate::types::{RadiruConfig, Root};
 
@@ -29,8 +28,13 @@ impl NhkRadioClient {
     pub async fn fetch_program(&self, program_url: &str) -> Result<Root> {
         let response = self.client.get(program_url).send().await?;
         let text = response.text().await?;
-        let program: Root = serde_json::from_str(&text)
-            .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {}. Response: {}", e, &text[..text.len().min(500)]))?;
+        let program: Root = serde_json::from_str(&text).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to parse JSON: {}. Response: {}",
+                e,
+                &text[..text.len().min(500)]
+            )
+        })?;
         Ok(program)
     }
 

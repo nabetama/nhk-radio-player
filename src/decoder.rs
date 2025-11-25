@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::io::Cursor;
 use symphonia::core::audio::{AudioBufferRef, Signal};
-use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_AAC};
+use symphonia::core::codecs::{CODEC_TYPE_AAC, DecoderOptions};
 use symphonia::core::errors::Error as SymphoniaError;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
@@ -20,22 +20,22 @@ pub fn decode_aac_to_pcm(aac_data: &[u8]) -> Result<Vec<i16>> {
     let format_opts = FormatOptions::default();
     let metadata_opts = MetadataOptions::default();
 
-    let probed = match symphonia::default::get_probe().format(
-        &hint,
-        mss,
-        &format_opts,
-        &metadata_opts,
-    ) {
-        Ok(p) => p,
-        Err(e) => {
-            log::debug!("Failed to probe AAC data: {}", e);
-            return Ok(Vec::new()); // Return empty on probe failure
-        }
-    };
+    let probed =
+        match symphonia::default::get_probe().format(&hint, mss, &format_opts, &metadata_opts) {
+            Ok(p) => p,
+            Err(e) => {
+                log::debug!("Failed to probe AAC data: {}", e);
+                return Ok(Vec::new()); // Return empty on probe failure
+            }
+        };
 
     let mut format = probed.format;
 
-    let track = match format.tracks().iter().find(|t| t.codec_params.codec == CODEC_TYPE_AAC) {
+    let track = match format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec == CODEC_TYPE_AAC)
+    {
         Some(t) => t,
         None => {
             log::debug!("No AAC track found");

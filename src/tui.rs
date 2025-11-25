@@ -2,15 +2,15 @@ use anyhow::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-    Frame, Terminal,
 };
 use std::io::{self, Stdout};
 use std::sync::Arc;
@@ -102,7 +102,13 @@ impl ProgramInfo {
                     (title, desc, time)
                 })
             })
-            .unwrap_or_else(|| ("番組情報を取得中...".to_string(), String::new(), String::new()));
+            .unwrap_or_else(|| {
+                (
+                    "番組情報を取得中...".to_string(),
+                    String::new(),
+                    String::new(),
+                )
+            });
 
         ProgramInfo {
             station_name: kind.display_name().to_string(),
@@ -136,7 +142,10 @@ fn format_time(iso_time: &str) -> String {
                 } else {
                     ("午後", if hour == 12 { 12 } else { hour - 12 })
                 };
-                return format!("{}年{}月{}日 {}{:02}:{}", parts[0], month, day, period, display_hour, minute);
+                return format!(
+                    "{}年{}月{}日 {}{:02}:{}",
+                    parts[0], month, day, period, display_hour, minute
+                );
             }
         }
     }
@@ -147,9 +156,9 @@ pub struct AppState {
     pub current_channel: ChannelKind,
     pub program_info: ProgramInfo,
     pub is_loading: bool,
+    pub is_switching: bool,
     pub animation_frame: usize,
 }
-
 
 pub struct Tui {
     terminal: Terminal<CrosstermBackend<Stdout>>,
@@ -236,6 +245,62 @@ fn render_ui(f: &mut Frame, state: &AppState) {
 
     // Help
     render_help(f, chunks[5]);
+
+    // Switching popup (render on top)
+    if state.is_switching {
+        render_switching_popup(f, state);
+    }
+}
+
+fn render_switching_popup(f: &mut Frame, state: &AppState) {
+    use ratatui::widgets::Clear;
+
+    let area = f.area();
+
+    // Center popup
+    let popup_width = 30;
+    let popup_height = 5;
+    let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+    let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+
+    let popup_area = Rect::new(popup_x, popup_y, popup_width, popup_height);
+
+    // Clear the area behind the popup
+    f.render_widget(Clear, popup_area);
+
+    // Spinner animation
+    let spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    let frame = spinner[state.animation_frame % spinner.len()];
+
+    let text = format!("{} 切替中...", frame);
+    let channel_name = state.current_channel.display_name();
+
+    let block = Block::default()
+        .title(format!(" {} ", channel_name))
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow))
+        .style(Style::default().bg(Color::Black));
+
+    let inner = block.inner(popup_area);
+    f.render_widget(block, popup_area);
+
+    let paragraph = Paragraph::new(text)
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(ratatui::layout::Alignment::Center);
+
+    // Center vertically within the popup
+    let text_area = Rect::new(
+        inner.x,
+        inner.y + (inner.height.saturating_sub(1)) / 2,
+        inner.width,
+        1,
+    );
+    f.render_widget(paragraph, text_area);
 }
 
 fn render_channel_selector(f: &mut Frame, area: Rect, state: &AppState) {
@@ -293,7 +358,11 @@ fn render_now_playing(f: &mut Frame, area: Rect, state: &AppState) {
 
     let block = Block::default()
         .title(title)
-        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan));
 
@@ -310,13 +379,21 @@ fn render_now_playing(f: &mut Frame, area: Rect, state: &AppState) {
 
     // Program title with time
     let title_line = if info.start_time.is_empty() {
-        format!("♪ {}", truncate_str(&info.program_title, content_width.saturating_sub(2)))
+        format!(
+            "♪ {}",
+            truncate_str(&info.program_title, content_width.saturating_sub(2))
+        )
     } else {
-        format!("♪ {}", truncate_str(&info.program_title, content_width.saturating_sub(2)))
+        format!(
+            "♪ {}",
+            truncate_str(&info.program_title, content_width.saturating_sub(2))
+        )
     };
     lines.push(Line::from(Span::styled(
         title_line,
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
     )));
 
     // Start time
@@ -335,7 +412,9 @@ fn render_now_playing(f: &mut Frame, area: Rect, state: &AppState) {
         let desc = truncate_str(&info.description, content_width);
         lines.push(Line::from(Span::styled(
             desc,
-            Style::default().fg(Color::White).add_modifier(Modifier::DIM),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::DIM),
         )));
     }
 
@@ -379,16 +458,12 @@ fn render_help(f: &mut Frame, area: Rect) {
         Span::raw(" 終了"),
     ]);
 
-    let paragraph = Paragraph::new(help)
-        .alignment(ratatui::layout::Alignment::Center);
+    let paragraph = Paragraph::new(help).alignment(ratatui::layout::Alignment::Center);
 
     f.render_widget(paragraph, area);
 }
 
-pub async fn run_interactive_player(
-    area: String,
-    initial_kind: ChannelKind,
-) -> Result<()> {
+pub async fn run_interactive_player(area: String, initial_kind: ChannelKind) -> Result<()> {
     let client = Arc::new(NhkRadioClient::new());
     let config = client.fetch_config().await?;
 
@@ -413,23 +488,30 @@ pub async fn run_interactive_player(
         current_channel: initial_kind,
         program_info: initial_info,
         is_loading: true,
+        is_switching: false,
         animation_frame: 0,
     };
 
     let (channel_tx, channel_rx) = watch::channel(initial_kind);
     let (audio_tx, audio_rx) = std::sync::mpsc::channel::<Vec<i16>>();
+    let (playback_notify_tx, playback_notify_rx) = std::sync::mpsc::channel::<()>();
 
     // Audio playback thread (must be on main thread for rodio)
-    let audio_handle = std::thread::spawn(move || {
-        run_audio_thread(audio_rx, channel_rx)
-    });
+    let audio_handle =
+        std::thread::spawn(move || run_audio_thread(audio_rx, channel_rx, playback_notify_tx));
 
     // Start streaming in background
     let player_client = client.clone();
     let player_stream_data = stream_data.clone();
     let player_channel_rx = channel_tx.subscribe();
     let player_handle = tokio::spawn(async move {
-        run_stream_loop(player_client, player_stream_data, player_channel_rx, audio_tx).await
+        run_stream_loop(
+            player_client,
+            player_stream_data,
+            player_channel_rx,
+            audio_tx,
+        )
+        .await
     });
 
     let mut tui = Tui::new()?;
@@ -439,8 +521,13 @@ pub async fn run_interactive_player(
     loop {
         tui.draw(&state)?;
 
+        // Check for playback started notification
+        if playback_notify_rx.try_recv().is_ok() {
+            state.is_switching = false;
+        }
+
         // Handle input with timeout for animation
-        if event::poll(std::time::Duration::from_millis(100))? {
+        if event::poll(std::time::Duration::from_millis(50))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
@@ -450,68 +537,63 @@ pub async fn run_interactive_player(
                         KeyCode::Char('1') => {
                             if state.current_channel != ChannelKind::R1 {
                                 state.current_channel = ChannelKind::R1;
-                                state.is_loading = true;
+                                state.is_switching = true;
                                 state.program_info = ProgramInfo::from_program(
                                     &program,
                                     ChannelKind::R1,
                                     &stream_data.areajp,
                                 );
                                 let _ = channel_tx.send(ChannelKind::R1);
-                                state.is_loading = false;
                             }
                         }
                         KeyCode::Char('2') => {
                             if state.current_channel != ChannelKind::R2 {
                                 state.current_channel = ChannelKind::R2;
-                                state.is_loading = true;
+                                state.is_switching = true;
                                 state.program_info = ProgramInfo::from_program(
                                     &program,
                                     ChannelKind::R2,
                                     &stream_data.areajp,
                                 );
                                 let _ = channel_tx.send(ChannelKind::R2);
-                                state.is_loading = false;
                             }
                         }
                         KeyCode::Char('3') => {
                             if state.current_channel != ChannelKind::Fm {
                                 state.current_channel = ChannelKind::Fm;
-                                state.is_loading = true;
+                                state.is_switching = true;
                                 state.program_info = ProgramInfo::from_program(
                                     &program,
                                     ChannelKind::Fm,
                                     &stream_data.areajp,
                                 );
                                 let _ = channel_tx.send(ChannelKind::Fm);
-                                state.is_loading = false;
                             }
                         }
                         KeyCode::Left | KeyCode::Char('h') => {
                             let new_channel = state.current_channel.prev();
                             if state.current_channel != new_channel {
                                 state.current_channel = new_channel;
-                                state.is_loading = true;
+                                state.is_switching = true;
                                 state.program_info = ProgramInfo::from_program(
                                     &program,
                                     new_channel,
                                     &stream_data.areajp,
                                 );
                                 let _ = channel_tx.send(new_channel);
-                                state.is_loading = false;
                             }
                         }
                         KeyCode::Right | KeyCode::Char('l') => {
                             let new_channel = state.current_channel.next();
                             if state.current_channel != new_channel {
                                 state.current_channel = new_channel;
-                                state.is_loading = true;
+                                state.is_switching = true;
                                 state.program_info = ProgramInfo::from_program(
                                     &program,
                                     new_channel,
                                     &stream_data.areajp,
                                 );
                                 let _ = channel_tx.send(new_channel);
-                                state.is_loading = false;
                             }
                         }
                         _ => {}
@@ -533,6 +615,7 @@ pub async fn run_interactive_player(
 fn run_audio_thread(
     rx: std::sync::mpsc::Receiver<Vec<i16>>,
     _channel_rx: watch::Receiver<ChannelKind>,
+    playback_notify: std::sync::mpsc::Sender<()>,
 ) -> Result<()> {
     use rodio::buffer::SamplesBuffer;
 
@@ -541,18 +624,16 @@ fn run_audio_thread(
     // Try to get audio output, retry if it fails
     let (stream, sink) = loop {
         match rodio::OutputStream::try_default() {
-            Ok((_stream, stream_handle)) => {
-                match rodio::Sink::try_new(&stream_handle) {
-                    Ok(sink) => {
-                        log::info!("Audio output initialized successfully");
-                        break (_stream, sink);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to create audio sink: {}", e);
-                        std::thread::sleep(std::time::Duration::from_secs(1));
-                    }
+            Ok((_stream, stream_handle)) => match rodio::Sink::try_new(&stream_handle) {
+                Ok(sink) => {
+                    log::info!("Audio output initialized successfully");
+                    break (_stream, sink);
                 }
-            }
+                Err(e) => {
+                    log::error!("Failed to create audio sink: {}", e);
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            },
             Err(e) => {
                 log::error!("Failed to get audio output: {}", e);
                 std::thread::sleep(std::time::Duration::from_secs(1));
@@ -564,6 +645,7 @@ fn run_audio_thread(
     let _stream = stream;
 
     let mut sample_count = 0u64;
+    let mut waiting_for_new_samples = false;
 
     loop {
         match rx.recv_timeout(std::time::Duration::from_millis(100)) {
@@ -572,14 +654,25 @@ fn run_audio_thread(
                     log::info!("Audio: Received clear signal, clearing sink");
                     sink.clear();
                     sink.play(); // Ensure sink is in playing state after clear
+                    waiting_for_new_samples = true;
                 } else {
                     sample_count += 1;
                     if sample_count % 10 == 1 {
-                        log::debug!("Audio: Received samples batch #{}, {} samples, sink empty: {}",
-                            sample_count, samples.len(), sink.empty());
+                        log::debug!(
+                            "Audio: Received samples batch #{}, {} samples, sink empty: {}",
+                            sample_count,
+                            samples.len(),
+                            sink.empty()
+                        );
                     }
                     let buffer = SamplesBuffer::new(2, 48000, samples);
                     sink.append(buffer);
+
+                    // Notify that playback has started after channel switch
+                    if waiting_for_new_samples {
+                        let _ = playback_notify.send(());
+                        waiting_for_new_samples = false;
+                    }
                 }
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -615,7 +708,11 @@ async fn run_stream_loop(
         if channel_rx.has_changed().unwrap_or(false) {
             let new_channel = *channel_rx.borrow_and_update();
             if new_channel != current_channel {
-                log::info!("Channel changed from {:?} to {:?}", current_channel, new_channel);
+                log::info!(
+                    "Channel changed from {:?} to {:?}",
+                    current_channel,
+                    new_channel
+                );
                 current_channel = new_channel;
                 seen_segments.clear();
                 // Send empty vec to signal clear
@@ -624,7 +721,11 @@ async fn run_stream_loop(
         }
 
         let m3u8_url = current_channel.get_url(&stream_data);
-        log::debug!("Fetching playlist for channel {:?}: {}", current_channel, m3u8_url);
+        log::debug!(
+            "Fetching playlist for channel {:?}: {}",
+            current_channel,
+            m3u8_url
+        );
 
         // Resolve master playlist if needed (cache the result)
         let actual_url = if let Some(url) = resolved_urls.get(&current_channel) {
